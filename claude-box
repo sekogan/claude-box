@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE_NAME="claude-box:uid-$(id -u)"
+USER_NAME="$(id -un)"
+SHARE_DIR="${HOME}/.local/share/claude-box"
+
+usage() {
+    cat <<EOF
+Usage: claude-box [OPTIONS] PATH [-- CLAUDE_ARGS...]
+
+Launch Claude Code in an isolated container for the given PATH.
+
+The container image is built automatically on first run.
+~/.claude.json and ~/.claude are mounted so Claude retains its
+configuration and session data across invocations.
+
+Options:
+  --rebuild    Rebuild the container image from scratch (--no-cache)
+  -h, --help   Show this help message
+
+Any arguments after -- are passed directly to the claude command inside
+the container (e.g. claude-box /my/project -- --model claude-opus-4-6).
+EOF
+    exit "${1:-0}"
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+REBUILD=false
+WORK_PATH=""
+CLAUDE_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --rebuild)
+            REBUILD=true
+            shift
+            ;;
+        -h|--help)
+            usage 0
+            ;;
+        --)
+            shift
+            CLAUDE_ARGS=("$@")
+            break
+            ;;
+        -*)
+            echo "claude-box: unknown option: $1" >&2
+            usage 1
+            ;;
+        *)
+            if [[ -n "$WORK_PATH" ]]; then
+                echo "claude-box: too many arguments" >&2
+                usage 1
+            fi
+            WORK_PATH="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$WORK_PATH" ]]; then
+    echo "claude-box: PATH argument is required" >&2
+    usage 1
+fi
+
+WORK_DIR="$(realpath "$WORK_PATH")"
+
+if [[ ! -d "$WORK_DIR" ]]; then
+    echo "claude-box: '$WORK_DIR' is not a directory" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Image build
+# ---------------------------------------------------------------------------
+build_image() {
+    local -a extra_args=()
+    if [[ "$REBUILD" == "true" ]]; then
+        extra_args+=("--no-cache")
+    fi
+
+    echo "claude-box: building image ${IMAGE_NAME} ..." >&2
+    podman build \
+        "${extra_args[@]}" \
+        --build-arg USER_UID="$(id -u)" \
+        --build-arg USER_GID="$(id -g)" \
+        --build-arg USER_NAME="$USER_NAME" \
+        -t "$IMAGE_NAME" \
+        "$SHARE_DIR"
+}
+
+if [[ "$REBUILD" == "true" ]]; then
+    build_image
+elif ! podman image exists "$IMAGE_NAME" 2>/dev/null; then
+    build_image
+fi
+
+# ---------------------------------------------------------------------------
+# Ensure Claude config paths exist on the host before mounting.
+# Mounting a non-existent file causes podman to create a directory instead.
+# ---------------------------------------------------------------------------
+if [[ ! -f "${HOME}/.claude.json" ]]; then
+    echo '{}' > "${HOME}/.claude.json"
+fi
+mkdir -p "${HOME}/.claude"
+
+# ---------------------------------------------------------------------------
+# Run
+#
+# --userns=keep-id   maps the host UID:GID to the same UID:GID inside the
+#                    container, which is what the Dockerfile user was built
+#                    with. This avoids root inside the container (required
+#                    by --dangerously-skip-permissions) and ensures bind-
+#                    mounted files are readable/writable without chown.
+#
+# :z on each volume  adds the 'container_file_t' SELinux label so the
+#                    container process is allowed to access the files.
+#                    Lower-case :z marks the label as shared (safe for home
+#                    directory contents that may be accessed by other
+#                    confined processes). Use :Z (private) only on
+#                    directories that are exclusively owned by this
+#                    container.
+# ---------------------------------------------------------------------------
+exec podman run \
+    --rm \
+    --interactive \
+    --tty \
+    --userns=keep-id \
+    -v "${WORK_DIR}:/workspace:z" \
+    -v "${HOME}/.claude.json:/home/${USER_NAME}/.claude.json:z" \
+    -v "${HOME}/.claude:/home/${USER_NAME}/.claude:z" \
+    "$IMAGE_NAME" \
+    "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"
