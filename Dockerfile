@@ -5,9 +5,20 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 ARG USER_NAME=user
 
-# Install system deps and global tools as root
-RUN apt-get update && apt-get install -y --no-install-recommends curl make python3 python3-pip && \
-    rm -rf /var/lib/apt/lists/* && \
+# Install system deps and global tools as root.
+# Supports Debian/Ubuntu (apt-get) and RHEL/Fedora/UBI (dnf).
+# On RHEL images npm is not pre-installed, so we add it explicitly;
+# on Debian we rely on it being present in the base image (e.g. node:lts-slim).
+RUN if command -v dnf > /dev/null 2>&1; then \
+        dnf install -y --nodocs curl make python3 python3-pip npm && \
+        dnf clean all; \
+    elif command -v apt-get > /dev/null 2>&1; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends curl make python3 python3-pip && \
+        rm -rf /var/lib/apt/lists/*; \
+    else \
+        echo "Unsupported base image: neither dnf nor apt-get found" >&2; exit 1; \
+    fi && \
     npm install -g markdownlint-cli
 
 # Create a non-root user matching the host UID/GID/name so that:
