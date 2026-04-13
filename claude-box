@@ -37,10 +37,17 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+BASE_IMAGE="node:lts-slim"
+
+# shellcheck source=/dev/null
+[[ -f "${HOME}/.config/claude-box.conf" ]] && source "${HOME}/.config/claude-box.conf"
+
+# ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
 REBUILD=false
-BASE_IMAGE="node:lts-slim"
 CLAUDE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
