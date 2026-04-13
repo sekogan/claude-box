@@ -11,7 +11,7 @@ image_slug() {
 
 usage() {
     cat <<EOF
-Usage: claude-box [OPTIONS] [-- CLAUDE_ARGS...]
+Usage: claude-box [OPTIONS] [COMMAND] [-- CLAUDE_ARGS...]
 
 Launch Claude Code in an isolated container, mounting the current directory
 (or the directory given by -C) as the workspace.
@@ -19,6 +19,11 @@ Launch Claude Code in an isolated container, mounting the current directory
 The container image is built automatically on first run.
 ~/.claude.json and ~/.claude are mounted so Claude retains its
 configuration and session data across invocations.
+
+Commands:
+  init    Write .config/claude-box.conf in the current directory with the
+          current effective configuration (from ~/.config/claude-box.conf
+          and CLI flags). Errors if the file already exists.
 
 Options:
   -C, --directory DIR        Change to DIR before doing anything
@@ -46,9 +51,14 @@ BASE_IMAGE="node:lts-slim"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
+# -C/--directory is handled immediately so the local config is loaded from
+# the right place. Other config-affecting flags are saved as CLI_* overrides
+# and applied after the local config is sourced.
 # ---------------------------------------------------------------------------
 REBUILD=false
+COMMAND=""
 CLAUDE_ARGS=()
+CLI_BASE_IMAGE=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -65,7 +75,7 @@ while [[ $# -gt 0 ]]; do
                 echo "claude-box: --base-image requires an argument" >&2
                 usage 1
             fi
-            BASE_IMAGE="$2"
+            CLI_BASE_IMAGE="$2"
             shift 2
             ;;
         --rebuild)
@@ -80,12 +90,57 @@ while [[ $# -gt 0 ]]; do
             CLAUDE_ARGS=("$@")
             break
             ;;
-        *)
+        -*)
             echo "claude-box: unknown option: $1" >&2
             usage 1
             ;;
+        *)
+            if [[ -n "$COMMAND" ]]; then
+                echo "claude-box: unexpected argument: $1" >&2
+                usage 1
+            fi
+            COMMAND="$1"
+            shift
+            ;;
     esac
 done
+
+# shellcheck source=/dev/null
+[[ -f ".config/claude-box.conf" ]] && source ".config/claude-box.conf"
+
+[[ -n "$CLI_BASE_IMAGE" ]] && BASE_IMAGE="$CLI_BASE_IMAGE"
+
+# ---------------------------------------------------------------------------
+# init command
+# ---------------------------------------------------------------------------
+if [[ "$COMMAND" == "init" ]]; then
+    if [[ ${#CLAUDE_ARGS[@]} -gt 0 ]]; then
+        echo "claude-box: 'init' does not accept -- arguments" >&2
+        usage 1
+    fi
+    CONF_FILE=".config/claude-box.conf"
+    if [[ -f "$CONF_FILE" ]]; then
+        echo "claude-box: '${PWD}/${CONF_FILE}' already exists; delete it to reinitialize" >&2
+        exit 1
+    fi
+    mkdir -p .config
+    cat > "$CONF_FILE" <<EOF
+# claude-box configuration
+# Sourced before CLI argument parsing; CLI flags take precedence.
+
+# Base image to layer Claude Code on top of.
+# Must be Debian/Ubuntu (apt-get) or RHEL/Fedora/UBI (dnf) compatible.
+# Each distinct base image gets its own cached container image.
+BASE_IMAGE="${BASE_IMAGE}"
+EOF
+    echo "claude-box: created ${PWD}/${CONF_FILE}" >&2
+    exit 0
+fi
+
+if [[ -n "$COMMAND" ]]; then
+    echo "claude-box: unknown command: $COMMAND" >&2
+    usage 1
+fi
 
 IMAGE_NAME="claude-box:uid-$(id -u)-$(image_slug "$BASE_IMAGE")"
 
