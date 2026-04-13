@@ -14,13 +14,14 @@ usage() {
 Usage: claude-box [OPTIONS] [-- CLAUDE_ARGS...]
 
 Launch Claude Code in an isolated container, mounting the current directory
-as the workspace.
+(or the directory given by -C) as the workspace.
 
 The container image is built automatically on first run.
 ~/.claude.json and ~/.claude are mounted so Claude retains its
 configuration and session data across invocations.
 
 Options:
+  -C, --directory DIR        Change to DIR before doing anything
   -b, --base-image IMAGE     Base image to layer Claude Code on top of
                              (default: node:lts-slim). Must be
                              Debian/Ubuntu (apt-get) or RHEL/Fedora/UBI (dnf)
@@ -44,6 +45,14 @@ CLAUDE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -C|--directory)
+            if [[ -z "${2:-}" ]]; then
+                echo "claude-box: --directory requires an argument" >&2
+                usage 1
+            fi
+            cd "$2"
+            shift 2
+            ;;
         --base-image|-b)
             if [[ -z "${2:-}" ]]; then
                 echo "claude-box: --base-image requires an argument" >&2
