@@ -193,6 +193,12 @@ GIT_CONFIG_MOUNTS=()
     GIT_CONFIG_MOUNTS+=(-v "/etc/gitconfig:/etc/gitconfig:ro")
 
 # ---------------------------------------------------------------------------
+# Environment variables forwarded to the container
+# ---------------------------------------------------------------------------
+FORWARDED_ENV=()
+[[ -n "${EDITOR:-}" ]] && FORWARDED_ENV+=(--env "EDITOR=${EDITOR}")
+
+# ---------------------------------------------------------------------------
 # Run
 #
 # --userns=keep-id   maps the host UID:GID to the same UID:GID inside the
@@ -218,5 +224,6 @@ exec podman run \
     -v "${HOME}/.claude.json:/home/${USER_NAME}/.claude.json:z" \
     -v "${HOME}/.claude:/home/${USER_NAME}/.claude:z" \
     "${GIT_CONFIG_MOUNTS[@]+"${GIT_CONFIG_MOUNTS[@]}"}" \
+    "${FORWARDED_ENV[@]+"${FORWARDED_ENV[@]}"}" \
     "$IMAGE_NAME" \
     "${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}"

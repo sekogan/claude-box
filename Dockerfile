@@ -10,11 +10,11 @@ ARG USER_NAME=user
 # On RHEL images npm is not pre-installed, so we add it explicitly;
 # on Debian we rely on it being present in the base image (e.g. node:lts-slim).
 RUN if command -v dnf > /dev/null 2>&1; then \
-        dnf install -y --nodocs curl git make python3 python3-pip npm && \
+        dnf install -y --nodocs curl git make python3 python3-pip npm vim && \
         dnf clean all; \
     elif command -v apt-get > /dev/null 2>&1; then \
         apt-get update && \
-        apt-get install -y --no-install-recommends curl git make python3 python3-pip && \
+        apt-get install -y --no-install-recommends curl git make python3 python3-pip vim && \
         rm -rf /var/lib/apt/lists/*; \
     else \
         echo "Unsupported base image: neither dnf nor apt-get found" >&2; exit 1; \
