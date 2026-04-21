@@ -1,4 +1,22 @@
-# claude-box
+# agent-box
+
+Containerized launchers for terminal-based coding agents. Each agent runs in an isolated [Podman](https://podman.io/) container, mounting your current project as the workspace.
+
+## Installation
+
+```sh
+make install
+```
+
+This installs all agents. To install a specific agent:
+
+```sh
+make -C claude install
+```
+
+## Agents
+
+### [claude-box](claude/)
 
 Run [Claude Code](https://claude.ai/code) in an isolated [Podman](https://podman.io/) container, mounting your current project as the workspace.
 
@@ -9,22 +27,14 @@ The container image is built automatically on first use and cached for subsequen
 > [!WARNING]
 > Claude Code is launched in **dangerous mode** (`--dangerously-skip-permissions`), meaning it will execute commands without asking for confirmation. The container limits the blast radius, but it does **not** make this fully safe. Prompt injection attacks can still instruct Claude to steal the contents of your working directory.
 
-## Features
+#### Features
 
 - **Isolation** — Claude Code runs in a container with access only to the current directory and your Claude config, nothing else on the host.
 - **Custom base images** — layer Claude Code on top of any Debian/Ubuntu or RHEL/Fedora/UBI image to give Claude the exact toolchain your project needs.
 - **Per-project configuration** — commit a `.config/claude-box.conf` to pin the base image for a project (`claude-box init`).
 - **SELinux-aware** — volume mounts are labelled correctly for SELinux hosts (Fedora, RHEL).
 
-## Installation
-
-```sh
-make install
-```
-
-This copies `claude-box` to `~/.local/bin` and the `Dockerfile` to `~/.local/share/claude-box`. Make sure `~/.local/bin` is in your `PATH`.
-
-## Usage
+#### Usage
 
 ```sh
 # Launch Claude Code in the current directory
